@@ -1,23 +1,18 @@
 package com.delta.myapplication;
 
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.Signature;
+import android.content.Intent;
 import android.os.Bundle;
 import android.app.Activity;
-import android.util.Base64;
 import android.util.Log;
 import android.view.Menu;
 import android.widget.ArrayAdapter;
 import android.widget.ListAdapter;
 import android.widget.ListView;
 
-import com.facebook.LoggingBehavior;
-import com.facebook.Request;
-import com.facebook.Response;
-import com.facebook.Settings;
-import com.facebook.model.GraphUser;
+import com.facebook.*;
+import com.facebook.model.*;
 
+/* imports used for app key creation */
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -28,36 +23,46 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // set logging behavior
-        Settings.addLoggingBehavior(LoggingBehavior.INCLUDE_ACCESS_TOKENS);
-        Settings.addLoggingBehavior(LoggingBehavior.REQUESTS);
+        //hack:generate an app key hash because keytool fails at life
+//        try {
+//            PackageInfo info = getPackageManager().getPackageInfo(
+//                    "com.delta.myapplication", PackageManager.GET_SIGNATURES);
+//            for (Signature signature : info.signatures) {
+//                MessageDigest md = MessageDigest.getInstance("SHA");
+//                md.update(signature.toByteArray());
+//                Log.e("MY KEY HASH:",
+//                        Base64.encodeToString(md.digest(), Base64.DEFAULT));
+//            }
+//        } catch (PackageManager.NameNotFoundException e) {
+//            e.printStackTrace();
+//        } catch (NoSuchAlgorithmException e) {
+//            e.printStackTrace();
+//        }
 
-        // set up the Request and Request.Callback
-        Request request = Request.newGraphPathRequest(null, "/4", new Request.Callback() {
+        // start Facebook Login
+        Session.openActiveSession(this, true, new Session.StatusCallback() {
             @Override
-            public void onCompleted(Response response) {
-                if(response.getError() != null) {
-                    // there was an error. print the error message
-                    Log.i("MainActivity", String.format("Error making request: %s", response.getError()));
-                } else {
-                    // the request succeeded. print out the information
-                    GraphUser user = response.getGraphObjectAs(GraphUser.class);
-                    Log.i("MainActivity", String.format("Name: %s", user.getName()));
+            public void call(Session session, SessionState state, Exception exception) {
+                Log.i("session.getState()", session.getState().toString());
 
-                    String[] info = new String[]{
-                            "Full name: " + user.getFirstName() + " " + user.getLastName(),
-                            "Profile: " + user.getLink()
-                    };
+                if (session.isOpened()) {
+                    Request.executeMeRequestAsync(session, new Request.GraphUserCallback() {
+                        @Override
+                        public void onCompleted(GraphUser user, Response response) {
+                            String[] info = new String[]{
+                                    "Full name: " + user.getFirstName() + " " + user.getMiddleName() + " " + user.getLastName(),
+                                    "Profile: " + user.getLink()
+                            };
 
-                    ListAdapter adapter = new ArrayAdapter<String>(getApplicationContext(), R.layout.facebook_info, info);
-                    ListView list = (ListView)findViewById(R.id.facebook_info_list);
-                    list.setAdapter(adapter);
+                            ListAdapter adapter = new ArrayAdapter<String>(getApplicationContext(), R.layout.facebook_info, info);
+                            ListView list = (ListView)findViewById(R.id.facebook_info_list);
+                            list.setAdapter(adapter);
+                        }
+                    });
                 }
             }
         });
-        request.executeAsync(); // execute the request
     }
-
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -65,5 +70,10 @@ public class MainActivity extends Activity {
         getMenuInflater().inflate(R.menu.main, menu);
         return true;
     }
-    
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        Session.getActiveSession().onActivityResult(this, requestCode, resultCode, data);
+    }
 }
